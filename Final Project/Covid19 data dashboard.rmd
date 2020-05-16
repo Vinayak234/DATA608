@@ -1,0 +1,487 @@
+---
+title: "Covid-19 Data Dashboard" 
+# author: "Vinayak Patel"
+# date: "`r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+    theme: yeti
+---
+
+``` {js}
+// Inverse the color of navigation bar.
+$('.navbar-inverse').removeClass('navbar-inverse').addClass('navbar-default');
+```
+
+
+```{r setup, include=FALSE}
+# Load necessary packages. 
+
+if (!require("flexdashboard")) install.packages("flexdashboard")# Dashboard package
+if (!require("highcharter")) install.packages("highcharter")# Interactive data visualizations
+if (!require("viridis")) install.packages("viridis")# Color gradients
+if (!require("tidyverse")) install.packages("tidyverse")# Metapackge
+if (!require("countrycode")) install.packages("leaflet")# Converting country names/codes
+if (!require("DT")) install.packages("DT")# Displaying data tables
+if (!require("crosstalk")) install.packages("crosstalk")# Provides interactivity for HTML widgets
+if (!require("plotly")) install.packages("plotly")# Interactive data visualizations
+if (!require("leaflet")) install.packages("leaflet")
+if (!require("scales")) install.packages("scales")
+if (!require("usmap")) install.packages("usmap")
+if (!require("rgdal")) install.packages("rgdal")
+if (!require("sp")) install.packages("sp")
+if (!require("tigris")) install.packages("tigris")
+#if (!require("rmarkdown")) install.packages("ggthemes")
+if (!require("manipulateWidget")) install.packages("manipulateWidget")
+#if (!require("formattable")) install.packages("formattable")
+#if (!require("directlabels")) install.packages("directlabels")
+```
+
+```{r include=FALSE}
+# Read in data. 
+countriesAggregated <- read.csv("https://raw.githubusercontent.com/datasets/covid-19/master/data/countries-aggregated.csv", header = TRUE)
+
+worldwideAggregated<- read.csv("https://raw.githubusercontent.com/datasets/covid-19/master/data/worldwide-aggregated.csv", stringsAsFactors = F, header = TRUE)
+
+us.data.save <- read_csv("https://raw.githubusercontent.com/Vinayak234/DataCovid/master/time_series_covid_19_confirmed_US.csv")
+
+covid_age <- read.csv("https://raw.githubusercontent.com/Vinayak234/DataCovid/master/Provisional_COVID-19_Death_Counts_by_Sex__Age__and_State.csv",header = TRUE)
+
+# Date to char for parsing and conversion
+countriesAggregated$Date <- as.character(countriesAggregated$Date)
+
+covid_age$Age.group <- factor(covid_age$Age.group, levels = c("Under 1 year","1-4 years", "5-14 years", "15-24 years", "25-34 years", "35-44 years", "45-54 years"	, "55-64 years", "65-74 years", "75-84 years", "85 years and over"))
+covid_age[is.na(covid_age)] <- 0
+
+#head(countriesAggregated)
+#head(us_confirmed)
+#head(worldwideAggregated)
+data_recent <- countriesAggregated %>% filter(Date %in% max(countriesAggregated$Date))
+
+Key_Country <- c('China', 'US','Italy',"United Kingdom", 'France', 'Germany',	'Spain',	'Iran')
+
+countriesAggregated$Date <- as.Date(countriesAggregated$Date)
+countriesAggregated<- countriesAggregated %>% 
+  select(Country,Date,Confirmed) %>%
+  group_by(Country, Date)%>%
+  filter(Country %in% Key_Country)
+
+# Create shared data that will be used to link filters, data table, and line plot. 
+shared_data <- SharedData$new(countriesAggregated, group = 'hello')
+
+
+
+```
+
+
+```{r include=FALSE}
+# Create a custom theme for the plots. 
+custom_theme <- hc_theme(
+  colors = c('#5CACEE', 'green', 'red'),
+  chart = list(
+         backgroundColor = '#FAFAFA', 
+         plotBorderColor = "black"),
+  xAxis = list(
+         gridLineColor = "C9C9C9", 
+         labels = list(style = list(color = "#333333")), 
+         lineColor = "#C9C9C9", 
+         minorGridLineColor = "#C9C9C9", 
+         tickColor = "#C9C9C9", 
+         title = list(style = list(color = "#333333"))), 
+  yAxis = list(
+         gridLineColor = "#C9C9C9", 
+         labels = list(style = list(color = "#333333")), 
+         lineColor = "#C9C9C9", 
+         minorGridLineColor = "#C9C9C9", 
+         tickColor = "#C9C9C9", 
+         tickWidth = 1, 
+         title = list(style = list(color = "#333333"))),   
+  title = list(style = list(color = '#333333', fontFamily = "Lato")),
+  subtitle = list(style = list(color = '#666666', fontFamily = "Lato")),
+  legend = list(
+         itemStyle = list(color = "#333333"), 
+         itemHoverStyle = list(color = "#FFF"), 
+         itemHiddenStyle = list(color = "#606063")), 
+  credits = list(style = list(color = "#666")),
+  itemHoverStyle = list(color = 'gray'))
+
+
+colConfirmed = "CadetBlue"
+colRecovered = "SeaGreen"
+colDeaths = "firebrick"
+age_color1 <- rev(plasma(11))
+sex_color <- c("#EE6AA7", "#87CEEB")
+
+```
+
+
+<style>
+.colored {
+  background-color: #FAFAFA;
+}
+</style>
+
+
+Worldwide
+=======================================================================
+
+Column {.tabset .tabset-fade data-width=700 .colored }
+-----------------------------------------------------------------------
+
+### Worldwide {.no-padding}
+
+```{r}
+# Create line plot.
+fig <- plot_ly(worldwideAggregated, x = ~Date, y = ~Confirmed,type = 'scatter',mode = 'lines', name = 'Confirmed', fill = 'tozeroy',
+        fillcolor = colConfirmed,
+        line = list(width = 0.4))
+fig <- fig %>% add_trace(y = ~Recovered, name = 'Recovered', type = 'scatter',mode = 'lines',fill = 'tozeroy',
+        fillcolor = colRecovered,
+        line = list(width = 0.4)) 
+fig <- fig %>% add_trace(y = ~Deaths, name = 'Deaths', type = 'scatter', mode = 'lines',fill = 'tozeroy',
+        fillcolor = colDeaths,
+        line = list(width = 0.4))
+fig <- fig %>% layout(title = "Confirmed Cases, Recovered, and Deaths",
+                      xaxis = list(title = 'Date'),
+         yaxis = list(title = 'Count of Cases'))
+fig
+
+```
+
+
+Column {data-width=300}
+-----------------------------------------------------------------------
+
+### Confirmed Cases :  <font size='1'> (`r paste("last updated :", max(data_recent$Date))`) </font>
+```{r}
+# worldwide number of Covid-19
+global_cases <- sum(data_recent$Confirmed)
+
+# Create value box
+valueBox(prettyNum(global_cases, big.mark = ","),
+         color = colConfirmed, icon = "fa-user-plus")
+```
+
+### Active Cases <font size='1'> (`r paste("last updated :", max(data_recent$Date))`) </font>
+```{r}
+# worldwide number of Active Case
+active_cases <- sum(data_recent$Confirmed) - sum(data_recent$Recovered) -
+  sum(data_recent$Deaths)
+
+# Create value box
+valueBox(prettyNum(active_cases, big.mark = ","),
+         color = "primary", icon = "fa-user-md")
+```
+
+
+### Recovered Cases <font size='1'> (`r paste("last updated :", max(data_recent$Date))`) </font>
+```{r}
+# worldwide number of Recovered Case
+Recovered_cases <- sum(data_recent$Recovered)
+
+# Create value box
+valueBox(prettyNum(Recovered_cases, big.mark = ","),
+         color = colRecovered, icon = "fa-heartbeat")
+```
+
+### Deceased Cases <font size='1'> (`r paste("last updated :", max(data_recent$Date))`) </font>
+```{r}
+# worldwide number of Recovered Case
+Deceased_cases <- sum(data_recent$Deaths)
+
+# Create value box
+valueBox(prettyNum(Deceased_cases, big.mark = ","),
+         icon = "fa-users", color = colDeaths)
+```
+
+
+US
+========================================================================
+
+Column {.tabset .tabset-fade data-width=400 .colored }
+-----------------------------------------------------------------------
+
+### By State {.no-padding}
+```{r}
+# Create tibble for overall Death by country
+
+Covid_death_state<- covid_age%>%
+  select(State,COVID.19.Deaths)%>%
+  group_by(State)%>%
+  summarise(covid_deaths=sum(COVID.19.Deaths))
+
+
+highchart() %>%
+    hc_add_series(Covid_death_state, hcaes(x = State, y = covid_deaths, color = covid_deaths), type = "bar")  %>% 
+    hc_tooltip(borderWidth = 1.5, 
+               pointFormat = paste("Death: <b>{point.y}</b>")) %>%
+    hc_legend(enabled = FALSE) %>%
+    hc_title(text = "Deaths by State") %>% 
+    hc_subtitle(text = "last updated: 05/09") %>%
+    hc_xAxis(categories = Covid_death_state$State, 
+             labels = list(step = 1),
+             min = 0, max = 30,
+             scrollbar = list(enabled = TRUE)) %>%
+    hc_yAxis(title = list(text = "Deaths")) %>%
+    hc_plotOptions(bar = list(stacking = "normal", 
+                              pointPadding = 0, groupPadding = 0, borderWidth = 0.5)) %>% 
+    hc_add_theme(custom_theme)
+```
+
+### By Gender {.no-padding}
+```{r}
+Covid_death_gender<- covid_age%>%
+  select(State,Sex, COVID.19.Deaths)%>%
+  group_by(State,Sex)%>%
+  summarise(covid_deaths=sum(COVID.19.Deaths))
+
+highchart() %>%
+    hc_add_series(Covid_death_gender, hcaes(x = State, y = covid_deaths, group = Sex), type = "bar", color = sex_color)  %>% 
+    hc_tooltip(borderWidth = 1.5, pointFormat = paste("Gender: <b>{point.Sex} ({point.percentage:.1f}%)</b> <br> Deaths: <b>{point.y}</b>")) %>%
+    hc_legend(enabled = TRUE, colorByPoint = TRUE) %>%
+    hc_title(text = "Death by state and gender") %>%
+    hc_subtitle(text = "last updated: 05/09") %>%
+    hc_xAxis(categories = unique(Covid_death_gender$State),
+             labels = list(step = 1),
+             min = 0, max = 30,
+             scrollbar = list(enabled = TRUE)) %>%
+    hc_yAxis(title = list(text = "Percent of total death")) %>%
+    hc_plotOptions(bar = list(stacking = "percent", 
+                              pointPadding = 0, groupPadding = 0, borderWidth = 0.4)) %>% 
+    hc_add_theme(custom_theme)
+```
+
+### By age {.no-padding}
+```{r}
+# Create tibble for death by countries and age 
+Covid_death_age<- covid_age%>%
+  select(State,Age.group,COVID.19.Deaths)%>%
+  group_by(State,Age.group)%>%
+  summarise(covid_deaths=sum(COVID.19.Deaths))
+Covid_death_age[is.na(Covid_death_age)] <- 0
+names(Covid_death_age)[names(Covid_death_age) == "Age.group"] <- "Age_group"
+
+# Create interactive bar plot.
+highchart() %>%
+    hc_add_series(Covid_death_age, hcaes(x = State, y = covid_deaths, group = Age_group), type = "bar", color = age_color1)  %>% 
+    hc_tooltip(borderWidth = 1.5, pointFormat = paste("Age: <b>{point.Age_group} ({point.percentage:.1f}%)</b> <br> Case: <b>{point.y}</b>")) %>%
+    hc_title(text = "Death by State and age") %>% 
+    hc_subtitle(text = "05-09-2020") %>%
+    hc_xAxis(categories = unique(Covid_death_age$State),
+             labels = list(step = 1),
+             min = 0, max = 30,
+             scrollbar = list(enabled = TRUE)) %>%
+    hc_yAxis(title = list(text = "Percent of total Death")) %>%
+    hc_plotOptions(bar = list(stacking = "percent", pointPadding = 0, groupPadding = 0, borderWidth = 0.5)) %>% 
+    hc_add_theme(custom_theme)
+```
+
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+```{r}
+# Repeating again for the us data
+us.data <- us.data.save[,c("Province_State")]
+lastcol <- us.data.save[tail(names(us.data.save), 1)]
+colnames(lastcol)[1] <- "count"
+us.data$count <- lastcol$count
+```
+
+```{r, include=FALSE}
+## Create the map object using the tigris package
+states <- states(cb=T)
+
+## Using the rgdal package to export the S4 SpatialPolygonsDataFrame so I can add it to Kaggle as an external dataset
+
+#dir.create("tempdir")
+#writeOGR(obj=states, dsn="tempdir", layer="states", driver="ESRI Shapefile")
+
+count.state <- us.data %>%
+  group_by(Province_State) %>%
+  summarise_all(list(sum)) %>% 
+  rename(NAME=Province_State,
+         total=count)
+
+# Adjust Rate per 100,000
+# To adjust confirmed cases  relative to population: 
+# load us map for 2015 Census population data
+#Take the statepop from the us mappackage: 
+
+state.pop <- statepop
+colnames(state.pop)[colnames(state.pop)=="full"] <- "NAME"
+# left join the data
+count.state <- count.state %>% left_join(state.pop, by=c("NAME"))
+# Calculating infections per 100,000 residents rounded to 2 digits
+count.state$Confirmed_Per_Capita <- round(count.state$total/count.state$pop_2015*100000,2)
+# can replace geo_join using sp "merge"
+state.merge <- sp::merge(states,count.state, by="NAME")
+#Set the color palette (viridis package option a = Magma)
+pal <- colorNumeric("viridis", domain=state.merge$Confirmed_Per_Capita, na.color="transparent")
+# Set the popup text option
+popup_t <- paste0("State: ", as.character(state.merge$NAME),  "<br>", 
+                  "Confirmed Cases Per 100,000 Residents: ", as.character(state.merge$Confirmed_Per_Capita),  "<br>",
+                  "Total Cases: ", as.character(state.merge$total))
+
+count.state<- count.state %>% filter(!is.na(abbr))
+
+```
+
+### Confirmed by country {.no-title .no-padding}
+
+```{r}
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  setView(-95, 38, zoom = 4) %>% 
+  addPolygons(data = state.merge , 
+              fillColor = ~pal(state.merge$Confirmed_Per_Capita), 
+              fillOpacity = 0.7, 
+              weight = 0.2, 
+              smoothFactor = 0.2, 
+              popup = ~popup_t) %>%
+  addLegend(pal = pal, 
+            values = state.merge$Confirmed_Per_Capita, 
+            position = "bottomright", 
+            title = "Cases Per Capita")
+
+```
+
+
+Country
+========================================================================
+
+
+```{r}
+
+```
+
+
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+### Datatable and Age {.no-title .no-padding}
+```{r}
+
+datatable(shared_data,
+          rownames = FALSE,
+          colnames = c('Country', 'Date', 'Confirmed'),
+          class = 'cell-border stripe',
+          width = '100%',
+          filter = 'top',
+          extensions = "Scroller",
+          options=list(deferRender = TRUE, 
+                       scrollY = 600, 
+                       scrollCollapse = TRUE,
+                       scroller = TRUE,
+                       dom = 't'))
+```
+
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Confirmed Cases by continent {.no-title .no-padding}
+```{r}
+
+# Create line graph. 
+plot_ly(shared_data, x = ~Date, y = ~Confirmed, 
+       color = ~Country, colors = sample(colours(), 20),
+       type = 'scatter', mode = 'lines',
+       hoverinfo = 'text', text = ~paste("Country: ", Country, '<br>Year: ', Date, "<br>Confirmed: ", Confirmed)) %>%
+       layout(showlegend = TRUE,
+              title = "Confirmed Cases by Country",
+              xaxis = list(title = "Date"),
+              yaxis = list(title = "Confirmed Cases")) %>%
+       layout(plot_bgcolor = 'White') %>% 
+       layout(paper_bgcolor = 'White') %>% 
+       add_markers() %>% 
+       highlight("plotly_click")
+```
+
+
+
+
+About {data-icon="fa-info-circle"}
+=======================================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### { .colored }
+
+**CDC-INFO**
+
+
+
+To find please view about Covid-19:
+
+* https://www.cdc.gov/coronavirus/2019-nCoV/index.html 
+
+or 
+
+Call 800-232-4636
+
+<br>
+
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### { .colored }
+
+**References:**  
+
+**Data Source(s)**
+
+[DATA hub](https://github.com/datasets/covid-19) 
+
+Data is in CSV format and updated daily. It is sourced from this upstream repository maintained by the amazing team at Johns Hopkins University Center for Systems Science and Engineering (CSSE) who have been doing a great public service from an early point by collating data from around the world. 
+
+>  Coronavirus disease 2019 (COVID-19) time series listing confirmed cases, reported deaths and reported recoveries. Data is disaggregated by country (and sometimes subregion). Coronavirus disease (COVID-19) is caused by the Severe acute respiratory syndrome Coronavirus 2 (SARS-CoV-2) and has had a worldwide effect. On March 11 2020, the World Health Organization (WHO) declared it a pandemic, pointing to the over 118,000 cases of the coronavirus illness in over 110 countries and territories around the world at the time.
+
+
+**Data Citation**
+
+Sources 
+The upstream dataset currently lists the following upstream datasources:
+
+[World Health Organization (WHO)] (https://www.who.int/)
+
+[DXY.cn. Pneumonia. 2020] (http://3g.dxy.cn/newh5/view/pneumonia.)
+
+[BNO News]( https://bnonews.com/index.php/2020/02/the-latest-coronavirus-cases/)
+
+[National Health Commission of the People’s Republic of China (NHC)] (http://www.nhc.gov.cn/xcs/yqtb/list_gzbd.shtml)
+
+[China CDC (CCDC)] ( http://weekly.chinacdc.cn/news/TrackingtheEpidemic.htm)
+
+[Hong Kong Department of Health] (https://www.chp.gov.hk/en/features/102465.html)
+
+[Macau Government] (https://www.ssm.gov.mo/portal/)
+
+[Taiwan CDC] (https://sites.google.com/cdc.gov.tw/2019ncov/taiwan?authuser=0)
+
+[US CDC](https://www.cdc.gov/coronavirus/2019-ncov/index.html)
+
+[Government of Canada] (https://www.canada.ca/en/public-health/services/diseases/coronavirus.html)
+
+[Australia Government Department of Health] (https://www.health.gov.au/news/coronavirus-update-at-a-glance)
+
+[European Centre for Disease Prevention and Control (ECDC)] (https://www.ecdc.europa.eu/en/geographical-distribution-2019-ncov-cases)
+
+[Ministry of Health Singapore (MOH)] (https://www.moh.gov.sg/covid-19)
+
+[Italy Ministry of Health] (http://www.salute.gov.it/nuovocoronavirus)
+
+
+
+**Toolset**
+
+This project managed in R. I explored using `leaflet` `plotly`, `highcharter`and `flexdashboard`
+
+**Project Delivery**
+
+`flexdashboard` Shiny web app. 
+
